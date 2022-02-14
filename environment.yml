@@ -1,0 +1,15 @@
+name: biomarkers
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - numpy
+  - jupyter
+  - pip
+  - pandas
+  - scipy
+  - nipype
+  - build
+  - pylint
+  - nilearn
+prefix: /home/psadil/anaconda3/envs/biomarkers
