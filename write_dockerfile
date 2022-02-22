@@ -1,0 +1,9 @@
+#!/bin/bash
+neurodocker generate docker --pkg-manager apt \
+    --base-image ubuntu:focal \
+    --miniconda version=latest  \
+    conda_install="numpy jupyter pip pandas scipy nipype build pylint nilearn scikit-image scipy pyyaml tqdm seaborn imageio vtk pywavelets" \
+    pip_install="niworkflows git+https://github.com/psadil/biomarkers.git#egg=biomarkers" \
+    --fsl  version=6.0.4 \
+    > Dockerfile
+
