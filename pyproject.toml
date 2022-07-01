@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "biomarkers"
+version = "0.1.0"
+description = "A package for doing great things!"
+authors = ["Patrick Sadil"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.9"
+nipype = ">=1.8"
+pandas = ">=1.4"
+numpy = ">=1.23"
+nibabel = ">=4.0"
+
+[tool.poetry.dev-dependencies]
+pytest = ">=7.1"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
