@@ -1,25 +1,19 @@
 # biomarkers
 
-A package for doing great things!
-
-## Installation
-
-```bash
-$ pip install biomarkers
-```
+Estimate A2CPS biomarker candidates from imaging data.
 
 ## Usage
 
-- TODO
+```bash
+$ pip install biomarkers
+$ mark ${bids}
+```
 
-## Contributing
+By default, outputs will be left in a newly created folder called `out`
 
-Interested in contributing? Check out the contributing guidelines. Please note that this project is released with a Code of Conduct. By contributing to this project, you agree to abide by its terms.
+### Singularity
 
-## License
-
-`biomarkers` was created by Patrick Sadil. It is licensed under the terms of the MIT license.
-
-## Credits
-
-`biomarkers` was created with [`cookiecutter`](https://cookiecutter.readthedocs.io/en/latest/) and the `py-pkgs-cookiecutter` [template](https://github.com/py-pkgs/py-pkgs-cookiecutter).
+```bash
+$ singularity run --cleanenv docker://psadil/biomarkers --help
+$ singularity run --cleanenv docker://psadil/biomarkers ${bids}
+```

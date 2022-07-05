@@ -2,6 +2,4 @@
 
 <!--next-version-placeholder-->
 
-## v0.1.0 (30/06/2022)
-
-- First release of `biomarkers`!
+Stay tuned!

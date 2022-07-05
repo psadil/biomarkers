@@ -151,8 +151,10 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
+.git
 *nii.gz
+tests
+docs
+.vscode
+tools
 
-# for now, until the tests are developed
-tests/data
-.devcontainer

@@ -1,0 +1,4 @@
+#!/bin/bash
+
+# after script registered with poetry install
+mark tests/bids

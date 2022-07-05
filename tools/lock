@@ -1,0 +1,6 @@
+#!/bin/bash
+
+# exlude a few lines that interfere with building
+# generate lockfile for use with local dev
+mamba env export |  grep -v prefix | grep -v biomarkers== > env.yml
+
