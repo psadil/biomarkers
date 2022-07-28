@@ -9,7 +9,7 @@ COPY --chown=$MAMBA_USER:$MAMBA_USER pyproject.toml README.md src /tmp/biomarker
 # # (otherwise python will not be found)
 ENV MAMBA_DOCKERFILE_ACTIVATE=1 
 RUN micromamba install --name base --yes --file /tmp/env.yml  \
-    && pip install --no-deps /tmp/biomarkers/ \
+    && pip install --no-deps pybids bids_validator /tmp/biomarkers/ \
     && rm -rf /tmp/biomarkers /tmp/env.yml \
     && micromamba clean --yes --all
 
