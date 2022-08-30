@@ -1,10 +1,6 @@
 from pathlib import Path
 
-from nipype.interfaces.base import (
-    ImageFile,
-    Directory,
-    TraitedSpec,
-)
+from nipype.interfaces.base import ImageFile, Directory, TraitedSpec
 from nipype.interfaces.fsl.base import FSLCommandInputSpec, FSLCommand
 
 
