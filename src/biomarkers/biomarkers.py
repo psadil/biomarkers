@@ -11,18 +11,20 @@ from .workflows.anat import AnatWF
 from .workflows.rest import RestWF
 
 
-# TODO: configure outputs directory (blocking on decision from group)
-
-
 class MainWF(nipype.Workflow):
-    def __init__(
-        self,
-        output_dir: Path,
-        anat: list[Path] | None = None,
-        rest: list[Path] | None = None,
-        **kwargs,
-    ):
+    def __init__(self, **kwargs):
         super().__init__(name="biomarkers", **kwargs)
+
+    @classmethod
+    def from_layout(
+        cls,
+        layout: bids.layout.BIDSLayout,
+        output_dir: Path,
+        anat: bool = True,
+        rest: bool = True,
+        **kwargs,
+    ) -> MainWF:
+        wf = cls(**kwargs)
         datasink = nipype.Node(
             nipype.DataSink(
                 base_directory=output_dir,
@@ -34,9 +36,15 @@ class MainWF(nipype.Workflow):
             run_without_submitting=True,
         )
         if anat:
-            self._connect_anat(anat, datasink=datasink)
+            t1w = layout.get(return_type="file", suffix="T1w", extension="nii.gz")
+            wf._connect_anat(t1w, datasink=datasink)
         if rest:
-            self._connect_rest(rest, datasink=datasink)
+            t1w = layout.get(return_type="file", suffix="T1w", extension="nii.gz")
+            bold = layout.get(
+                return_type="file", suffix="bold", extension="nii.gz", task="rest"
+            )
+            wf._connect_rest(bold, anat=t1w[0], datasink=datasink)
+        return wf
 
     def _connect_anat(self, anat: list[Path], datasink: nipype.Node) -> MainWF:
         inputnode = io.InputNode.from_fields(
@@ -58,14 +66,24 @@ class MainWF(nipype.Workflow):
         )
         return self
 
-    def _connect_rest(self, rest: list[Path], datasink: nipype.Node) -> MainWF:
+    def _connect_rest(
+        self, rest: list[Path], anat: Path, datasink: nipype.Node
+    ) -> MainWF:
         inputnode = io.InputNode.from_fields(
-            ["in_file"], iterables=[("in_file", rest)], name="input_rest"
+            ["in_file", "anat"], iterables=[("in_file", rest)], name="input_rest"
         )
+        inputnode.inputs.anat = anat
         wf = RestWF()
         self.connect(
             [
-                (inputnode, wf, [("in_file", "inputnode.in_file")]),
+                (
+                    inputnode,
+                    wf,
+                    [
+                        ("in_file", "inputnode.in_file"),
+                        ("anat", "inputnode.anat"),
+                    ],
+                ),
                 (
                     wf,
                     datasink,
@@ -92,8 +110,8 @@ class MainWF(nipype.Workflow):
     default="work",
     type=click.Path(file_okay=False, dir_okay=True, resolve_path=True, path_type=Path),
 )
-@click.option("--anat", default=True, is_flag=True)
-@click.option("--rest", default=True, is_flag=True)
+@click.option("--anat", default=False, is_flag=True)
+@click.option("--rest", default=False, is_flag=True)
 @click.option(
     "--plugin",
     default="Linear",
@@ -103,26 +121,15 @@ def main(
     src: Path,
     output_dir: Path = Path("out"),
     base_dir: Path = Path("work"),
-    anat: bool = True,
-    rest: bool = True,
+    anat: bool = False,
+    rest: bool = False,
     plugin: str = "Linear",
 ) -> None:
 
     layout = bids.BIDSLayout(root=src)
-    kwargs = {}
-    if anat:
-        kwargs.update(
-            {"anat": layout.get(return_type="file", suffix="T1w", extension="nii.gz")}
-        )
-    if rest:
-        kwargs.update(
-            {
-                "rest": layout.get(
-                    return_type="file", suffix="T1w", extension="nii.gz", task="rest"
-                )
-            }
-        )
 
-    wf = MainWF(output_dir=output_dir, base_dir=base_dir, **kwargs)
+    wf = MainWF.from_layout(
+        output_dir=output_dir, base_dir=base_dir, layout=layout, anat=anat, rest=rest
+    )
 
     wf.run(plugin)

@@ -1,17 +1,16 @@
+import os
 import pathlib
 
-import numpy as np
+import pandas as pd
 
 from nipype.interfaces.base import (
     TraitedSpec,
     ImageFile,
     File,
-    DynamicTraitedSpec,
     BaseInterface,
 )
 
 from nilearn.maskers import NiftiSpheresMasker
-from nilearn.connectome import ConnectivityMeasure
 
 
 class FEATConInputSpec(TraitedSpec):
@@ -22,9 +21,17 @@ class FEATConInputSpec(TraitedSpec):
         resolve=True,
         desc="image to process",
     )
+    confounds = ImageFile(
+        exists=True,
+        manditory=False,
+        copyfile=False,
+        resolve=True,
+        default=None,
+        desc="tsv of confounds",
+    )
 
 
-class FEATConOutputSpec(DynamicTraitedSpec):
+class FEATConOutputSpec(TraitedSpec):
     correlation_matrix = File(desc="correlation matrix")
 
 
@@ -32,6 +39,9 @@ class FEATCon(BaseInterface):
 
     input_spec = FEATConInputSpec
     output_spec = FEATConOutputSpec
+
+    def __init__(self, **inputs):
+        super().__init__(**inputs)
 
     def _run_interface(self, runtime):
 
@@ -44,25 +54,27 @@ class FEATCon(BaseInterface):
         # Additionally, we pass confound information to ensure our extracted
         # signal is cleaned from confounds.
         time_series = masker.fit_transform(self.inputs.in_file)
+        d = pd.DataFrame(time_series, columns=coords)
+        d.corr().to_csv(self._get_outfile(), sep="\t")
 
-        connectivity_measure = ConnectivityMeasure(kind="correlation")
-        correlation_matrix = connectivity_measure.fit_transform([time_series])
+        # connectivity_measure = ConnectivityMeasure(kind="correlation")
+        # correlation_matrix = connectivity_measure.fit_transform([time_series])
 
-        np.savetxt(
-            fname=self._get_outfile(),
-            X=correlation_matrix[0],
-            header=" ".join(x for x in coords),
-        )
+        # np.savetxt(
+        #     fname=self._get_outfile(),
+        #     X=correlation_matrix[0],
+        #     header=" ".join(str(x) for x in coords),
+        # )
 
         return runtime
 
     def _list_outputs(self) -> dict:
         outputs = self.output_spec().get()
-        outputs["correlation_matrix"] = self._get_outfile()
+        outputs["correlation_matrix"] = os.path.abspath(self._get_outfile())
         return outputs
 
     def _get_outfile(self) -> str:
-        return f"{self._get_infile_stem()}.txt"
+        return f"{self._get_infile_stem()}.tsv"
 
     def _get_infile_stem(self):
         return (

@@ -29,7 +29,7 @@ set fmri(featwatcher_yn) 1
 set fmri(sscleanup_yn) 0
 
 # Output directory
-set fmri(outputdir) "$feat_dir"
+set fmri(outputdir) "$outputdir"
 
 # TR(s)
 set fmri(tr) $repetition_time
@@ -226,7 +226,7 @@ set fmri(reginitial_highres_search) 90
 set fmri(reginitial_highres_dof) 3
 
 # Registration to main structural
-set fmri(reghighres_yn) 0
+set fmri(reghighres_yn) 1
 
 # Search space for registration to main structural
 # 0   : No search
@@ -244,7 +244,7 @@ set fmri(regstandard_yn) 1
 set fmri(alternateReference_yn) 0
 
 # Standard image
-set fmri(regstandard) "/mnt/60C4F60CC4F5E3E6/Users/psadi/fsl/data/standard/MNI152_T1_2mm_brain"
+set fmri(regstandard) "$regstandard"
 
 # Search space for registration to standard space
 # 0   : No search
@@ -256,7 +256,7 @@ set fmri(regstandard_search) 90
 set fmri(regstandard_dof) 12
 
 # Do nonlinear registration from structural to standard space?
-set fmri(regstandard_nonlinear_yn) 0
+set fmri(regstandard_nonlinear_yn) 1
 
 # Control nonlinear warp field resolution
 set fmri(regstandard_nonlinear_warpres) 10
@@ -276,6 +276,9 @@ set feat_files(1) "$in_file"
 
 # Add confound EVs text file
 set fmri(confoundevs) 0
+
+# Subject's structural image for analysis 1
+set highres_files(1) "$highres_file"
 
 # EV 1 title
 set fmri(evtitle1) ""
