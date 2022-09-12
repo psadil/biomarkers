@@ -56,7 +56,7 @@ def get_volumes(
 
 
 class FIRSTWF(nipype.Workflow):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(name="first_wf")
         inputnode = io.InputNode.from_fields(["in_file"])
         outputnode = io.OutputNode.from_fields(["anat", "volumes"])
@@ -64,7 +64,7 @@ class FIRSTWF(nipype.Workflow):
         volumes = nipype.Node(
             interface=nipype.Function(
                 input_names=["src", "labels"],
-                output_names=["volumes"],
+                output_names="volumes",
                 function=get_volumes,
             ),
             name="volumes",

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import nipype
 
 from .first import FIRSTWF
@@ -11,7 +9,7 @@ from ..nodes import io
 
 
 class AnatWF(nipype.Workflow):
-    def __init__(self) -> AnatWF:
+    def __init__(self) -> None:
         super().__init__(name="anat")
         inputnode = io.InputNode.from_fields(["in_file"])
         outputnode = io.OutputNode.from_fields(["anat", "volumes"])
