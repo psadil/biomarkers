@@ -9,7 +9,6 @@ dependencies = [
     "numpy",
     "pandas",
     "nipype",
-    "attrs",
     "pybids"
 ]
 # note some dependencies only available through conda (see env.yml)
@@ -33,3 +32,6 @@ build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.mypy]
+mypy_path = ".typings"

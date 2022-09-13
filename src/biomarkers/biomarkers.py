@@ -8,12 +8,13 @@ import bids
 
 from .nodes import io
 from .workflows.anat import AnatWF
-from .workflows.rest import RestWF
+
+# from .workflows.rest import RestWF
 from .workflows.cat import CATWF
 
 
 class MainWF(nipype.Workflow):
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs) -> None:
         super().__init__(name="biomarkers", **kwargs)
 
     @classmethod
@@ -77,28 +78,29 @@ class MainWF(nipype.Workflow):
     def _connect_rest(
         self, rest: list[Path], anat: Path, datasink: nipype.Node
     ) -> MainWF:
-        inputnode = io.InputNode.from_fields(
-            ["in_file", "anat"], iterables=[("in_file", rest)], name="input_rest"
-        )
-        inputnode.inputs.anat = anat
-        wf = RestWF()
-        self.connect(
-            [
-                (
-                    inputnode,
-                    wf,
-                    [
-                        ("in_file", "inputnode.in_file"),
-                        ("anat", "inputnode.anat"),
-                    ],
-                ),
-                (
-                    wf,
-                    datasink,
-                    [("outputnode.correlation_matrix", "@correlation_matrix")],
-                ),
-            ]
-        )
+        pass
+        # inputnode = io.InputNode.from_fields(
+        #     ["in_file", "anat"], iterables=[("in_file", rest)], name="input_rest"
+        # )
+        # inputnode.inputs.anat = anat
+        # wf = RestWF()
+        # self.connect(
+        #     [
+        #         (
+        #             inputnode,
+        #             wf,
+        #             [
+        #                 ("in_file", "inputnode.in_file"),
+        #                 ("anat", "inputnode.anat"),
+        #             ],
+        #         ),
+        #         (
+        #             wf,
+        #             datasink,
+        #             [("outputnode.correlation_matrix", "@correlation_matrix")],
+        #         ),
+        #     ]
+        # )
         return self
 
     def _connect_cat(self, cat_dir: Path, datasink: nipype.Node) -> MainWF:

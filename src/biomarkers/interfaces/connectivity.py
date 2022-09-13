@@ -40,10 +40,10 @@ class FEATCon(BaseInterface):
     input_spec = FEATConInputSpec
     output_spec = FEATConOutputSpec
 
-    def __init__(self, **inputs):
+    def __init__(self, **inputs) -> None:
         super().__init__(**inputs)
 
-    def _run_interface(self, runtime):
+    def _run_interface(self, runtime: dict) -> dict:
 
         # labels = ["Medial Prefrontal Cortex", "Right Nucleus Accumbens"]
         coords = [(2, 52, -2), (10, 12, -8)]

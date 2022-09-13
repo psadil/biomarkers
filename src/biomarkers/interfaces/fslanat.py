@@ -29,10 +29,10 @@ class FSLAnat(FSLCommand):
     input_spec = FSLAnatInputSpec
     output_spec = FSLAnatOutputSpec
 
-    def _list_outputs(self):
+    def _list_outputs(self) -> dict:
         outputs = self.output_spec().get()
         outputs["anat"] = f"{self._get_infile_stem()}.anat"
         return outputs
 
-    def _get_infile_stem(self):
+    def _get_infile_stem(self) -> str:
         return Path(self.inputs.in_file).name.removesuffix(".gz").removesuffix(".nii")
