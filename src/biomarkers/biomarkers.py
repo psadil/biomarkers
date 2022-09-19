@@ -20,7 +20,7 @@ def _main(
 ) -> None:
 
     if anat:
-        t1w = {x for x in bids_dir.glob("*.nii.gz")}
+        t1w = {x for x in bids_dir.glob("sub*/**/*nii.gz")}
         fslanat_flow(src=t1w, out=output_dir)
         if cat_dir:
             cat_flow(cat_dir=cat_dir, out=output_dir)

@@ -1,13 +1,14 @@
 from __future__ import annotations
 from pathlib import Path
 
-
 import numpy as np
 import pandas as pd
 import nibabel as nb
 
 import pydantic
 from pydantic.dataclasses import dataclass
+
+from .. import utils
 
 
 @dataclass(frozen=True)
@@ -138,9 +139,7 @@ class CATResult:
     def write_volumes(
         self,
         filename,
-        mask: Path = Path(
-            "/home/psadil/git/a2cps/biomarkers/src/biomarkers/data/smallwood_mpfc_MNI152_1p5.nii.gz"
-        ),
+        mask: Path = utils.get_mpfc_mask(),
     ) -> None:
 
         sample_mask = np.asanyarray(
