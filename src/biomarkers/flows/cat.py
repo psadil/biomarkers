@@ -1,14 +1,11 @@
 from __future__ import annotations
-
-from prefect.tasks import task_input_hash
-
 from pathlib import Path
 
 import prefect
 from prefect.tasks import task_input_hash
 
 from ..models.cat import CATResult
-from .. import utils
+from ..task import utils
 
 
 @prefect.task(cache_key_fn=task_input_hash)

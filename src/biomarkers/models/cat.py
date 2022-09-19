@@ -8,7 +8,7 @@ import nibabel as nb
 import pydantic
 from pydantic.dataclasses import dataclass
 
-from .. import utils
+from ..task import utils
 
 
 @dataclass(frozen=True)

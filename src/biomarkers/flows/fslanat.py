@@ -8,11 +8,12 @@ from prefect.tasks import task_input_hash
 from prefect_shell import shell_run_command
 
 from ..models.fslanat import FSLAnatResult
-from .. import utils
+from ..task import utils
 
 
-def _predict_fsl_anat_output(s: str) -> Path:
-    return Path(s).with_suffix(".anat").absolute()
+@prefect.task
+def _predict_fsl_anat_output(out: Path, basename: str) -> Path:
+    return Path(out / basename).with_suffix(".anat").absolute()
 
 
 @prefect.task
@@ -30,20 +31,26 @@ def write_first_volumes(fslanat: FSLAnatResult, filename: Path) -> None:
     fslanat.write_volumes(filename=filename)
 
 
+@prefect.task
+def get_cmd(anat: Path, src: Path, out: Path, basename: str) -> str:
+    # if the output already exists, we don't want this to run again.
+    # if it exists, we change the command to just "echo"
+    # fsl_anat automatically and always adds .anat to the value of -o, so we check for the existence
+    # of that predicted output, but then feed in the unmodified value of -o to the task.
+    if anat.exists():
+        cmd = f"echo 'Found existing FSLAnatResult at output location, {anat}. Assuming complete, so will skip (remove {anat} to run).'"
+    else:
+        cmd = f"fsl_anat -i {src} -o {out / basename}"
+    return cmd
+
+
 @prefect.flow
 def fslanat_flow(src: set[Path], out: Path) -> None:
     for s in src:
-        basename = utils._img_basename(s)
-        # if the output already exists, we don't want this to run again.
-        # if it exists, we change the command to just "echo"
-        # fsl_anat automatically and always adds .anat to the value of -o, so we check for the existence
-        # of that predicted output, but then feed in the unmodified value of -o to the task.
-        anat = _predict_fsl_anat_output(out / basename)
-        if anat.exists():
-            cmd = f"echo 'Found existing FSLAnatResult at output location, {anat}. Assuming complete, so will skip {s} (remove {anat} to run).'"
-        else:
-            cmd = f"echo fsl_anat -i {s} -o {out / basename} --noreg --nononlinreg --noseg --nosubcortseg"
+        basename = utils._img_basename.submit(s)
+        anat = _predict_fsl_anat_output.submit(out, basename)
+        cmd = get_cmd.submit(anat=anat, src=src, out=out, basename=basename)
 
-        last_line = shell_run_command(command=cmd)
-        fslanat = build_fslanat.submit(root=anat, wait_for=last_line)
+        last_line = shell_run_command.submit(command=cmd)
+        fslanat = build_fslanat.submit(root=anat, wait_for=[last_line])
         write_first_volumes.submit(fslanat, out / f"{utils._img_basename(s)}_first.tsv")
