@@ -4,12 +4,13 @@ version = "0.1.0"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
-    "nibabel",
     "click",
+    "nibabel",
+    "nilearn",
     "numpy",
     "pandas",
-    "nipype",
-    "pybids"
+    "prefect",
+    "prefect_shell"
 ]
 # note some dependencies only available through conda (see env.yml)
 # downloaded from channel https://fsl.fmrib.ox.ac.uk/fsldownloads/fslconda/public
@@ -35,3 +36,4 @@ testpaths = ["tests"]
 
 [tool.mypy]
 mypy_path = ".typings"
+plugins = "pydantic.mypy"
