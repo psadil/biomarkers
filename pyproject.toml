@@ -10,7 +10,8 @@ dependencies = [
     "numpy",
     "pandas",
     "prefect",
-    "prefect_shell"
+    "prefect_shell",
+    "prefect-dask"
 ]
 # note some dependencies only available through conda (see env.yml)
 # downloaded from channel https://fsl.fmrib.ox.ac.uk/fsldownloads/fslconda/public

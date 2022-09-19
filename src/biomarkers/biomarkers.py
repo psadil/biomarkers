@@ -4,13 +4,12 @@ from pathlib import Path
 import click
 
 import prefect
-from prefect_ray.task_runners import RayTaskRunner
 
 from .flows.fslanat import fslanat_flow
 from .flows.cat import cat_flow
 
 
-@prefect.flow(task_runner=RayTaskRunner)
+@prefect.flow
 def _main(
     bids_dir: Path,
     output_dir: Path = Path("out"),

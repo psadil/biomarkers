@@ -6,6 +6,7 @@ import pydantic
 import prefect
 from prefect.tasks import task_input_hash
 from prefect_shell import shell_run_command
+from prefect_dask import DaskTaskRunner
 
 from ..models.fslanat import FSLAnatResult
 from ..task import utils
@@ -44,7 +45,7 @@ def get_cmd(anat: Path, image: Path, out: Path, basename: str) -> str:
     return cmd
 
 
-@prefect.flow
+@prefect.flow(task_runner=DaskTaskRunner)
 def fslanat_flow(images: set[Path], out: Path) -> None:
     for image in images:
         basename = utils._img_basename.submit(image)

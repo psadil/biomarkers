@@ -3,6 +3,7 @@ from pathlib import Path
 
 import prefect
 from prefect.tasks import task_input_hash
+from prefect_dask import DaskTaskRunner
 
 from ..models.cat import CATResult
 from ..task import utils
@@ -13,7 +14,7 @@ def write_cat_volumes(catresult: CATResult, filename: Path) -> None:
     catresult.write_volumes(filename=filename)
 
 
-@prefect.flow
+@prefect.flow(task_runner=DaskTaskRunner)
 def cat_flow(cat_dir: Path, out: Path) -> None:
 
     for i in cat_dir.glob("*.nii.gz"):
