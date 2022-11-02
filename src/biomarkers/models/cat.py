@@ -8,7 +8,7 @@ import nibabel as nb
 import pydantic
 from pydantic.dataclasses import dataclass
 
-from ..task import utils
+from .. import utils
 
 
 @dataclass(frozen=True)
@@ -126,7 +126,7 @@ class CATResult:
 
     @classmethod
     def from_root(cls, root: Path, img: Path) -> CATResult:
-        src = img.name.removesuffix(".gz").removesuffix(".nii")
+        src = utils.img_stem(img)
         return cls(
             root=root,
             img=img,
