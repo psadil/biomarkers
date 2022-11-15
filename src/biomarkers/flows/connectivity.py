@@ -1,4 +1,3 @@
-from typing import Iterable, Literal
 from pathlib import Path
 import re
 
@@ -35,6 +34,7 @@ from prefect.tasks import task_input_hash
 
 from .. import utils
 from ..task import compcor
+from ..task import utils as task_utils
 
 
 # TODO: remove 8 nodes from ower2011 atlas that are in the cerebellum
@@ -54,24 +54,6 @@ class ConnectivityFiles:
     confounds: pydantic.FilePath
     mask: pydantic.FilePath
     stem: str
-
-
-def _mat_to_df(cormat: np.ndarray, labels: Iterable[str]) -> pd.DataFrame:
-    source = []
-    target = []
-    connectivity = []
-    for xi, x in enumerate(labels):
-        for yi, y in enumerate(labels):
-            if yi <= xi:
-                continue
-            else:
-                source.append(x)
-                target.append(y)
-                connectivity.append(cormat[xi, yi])
-
-    return pd.DataFrame.from_dict(
-        {"source": source, "target": target, "connectivity": connectivity}
-    )
 
 
 def df_to_coordinates(dataframe: pd.DataFrame) -> frozenset[Coordinate]:
@@ -135,11 +117,11 @@ def spheres_connectivity(
     # confounds are already sliced
     time_series = masker.fit_transform(imgs=nii, confounds=confounds)
     connectivity_measure = ConnectivityMeasure(
-        cov_estimator=covariance.EmpiricalCovariance(store_precision=False),
+        cov_estimator=covariance.EmpiricalCovariance(store_precision=False),  # type: ignore
         kind="correlation",
     )
-    correlation_matrix = connectivity_measure.fit_transform([time_series]).squeeze()
-    df = _mat_to_df(correlation_matrix, [x.label for x in coordinates]).assign(
+    correlation_matrix = connectivity_measure.fit_transform([time_series]).squeeze()  # type: ignore
+    df = utils._mat_to_df(correlation_matrix, [x.label for x in coordinates]).assign(
         confounds="+".join([str(x) for x in confounds.columns.values]),
     )
     df["connectivity"] = np.arctanh(df["connectivity"])
@@ -179,13 +161,13 @@ def get_labels_connectivity(
     # confounds are already sliced
     time_series = masker.fit_transform(imgs=nii, confounds=confounds)
     connectivity_measure = ConnectivityMeasure(
-        cov_estimator=covariance.EmpiricalCovariance(store_precision=False),
+        cov_estimator=covariance.EmpiricalCovariance(store_precision=False),  # type: ignore
         kind="correlation",
     )
     correlation_matrix: np.ndarray = connectivity_measure.fit_transform(
         [time_series]
-    ).squeeze()
-    df = _mat_to_df(
+    ).squeeze()  # type: ignore
+    df = utils._mat_to_df(
         correlation_matrix, [str(x + 1) for x in range(correlation_matrix.shape[0])]
     ).assign(
         img=utils.img_stem(img),
@@ -229,7 +211,7 @@ def get_gray_connectivity(
         standardize=False,
         detrend=detrend,
         mask_img=brain_mask,
-    )
+    )  # type: ignore
     del nii
 
     mask_nii = nb.load(mask_img)
@@ -246,70 +228,18 @@ def get_gray_connectivity(
     X: np.ndarray = masking.apply_mask(imgs=imgs, mask_img=mask_nii)
     del imgs
     connectivity_measure = ConnectivityMeasure(
-        cov_estimator=covariance.EmpiricalCovariance(store_precision=False),
+        cov_estimator=covariance.EmpiricalCovariance(store_precision=False),  # type: ignore
         kind="correlation",
     )
-    correlation_matrix = connectivity_measure.fit_transform([X]).squeeze()
+    correlation_matrix = connectivity_measure.fit_transform([X]).squeeze()  # type: ignore
     del X
-    df = _mat_to_df(
+    df = utils._mat_to_df(
         correlation_matrix, np.flatnonzero(np.asanyarray(mask_nii.dataobj))
     ).assign(
         img=utils.img_stem(img),
         confounds="+".join([str(x) for x in confounds.columns.values]),
     )
     return df
-
-
-@prefect.task
-@utils.cache_dataframe
-def update_confounds(
-    acompcor_file: Path,
-    confounds: Path,
-    usecols: list[str] = [
-        "trans_x",
-        "trans_x_derivative1",
-        "trans_x_power2",
-        "trans_x_derivative1_power2",
-        "trans_y",
-        "trans_y_derivative1",
-        "trans_y_power2",
-        "trans_y_derivative1_power2",
-        "trans_z",
-        "trans_z_derivative1",
-        "trans_z_power2",
-        "trans_z_derivative1_power2",
-        "rot_x",
-        "rot_x_derivative1",
-        "rot_x_power2",
-        "rot_x_derivative1_power2",
-        "rot_y",
-        "rot_y_derivative1",
-        "rot_y_power2",
-        "rot_y_derivative1_power2",
-        "rot_z",
-        "rot_z_derivative1",
-        "rot_z_power2",
-        "rot_z_derivative1_power2",
-    ],
-    label: Literal["CSF", "WM", "WM+CSF"] = "WM+CSF",
-) -> pd.DataFrame:
-    acompcor = pd.read_parquet(
-        acompcor_file, columns=["component", "tr", "value", "label"]
-    )
-    components = (
-        acompcor.query("label==@label and component < 5")
-        .drop("label", axis=1)
-        .pivot(index="tr", columns=["component"], values="value")
-    )
-    n_tr = components.shape[0]
-    components_df = (
-        pd.read_csv(confounds, delim_whitespace=True, usecols=usecols)
-        .iloc[-n_tr:, :]
-        .reset_index(drop=True)
-    )
-    out = pd.concat([components_df, components], axis=1)
-    out.columns = out.columns.astype(str)
-    return out
 
 
 @prefect.task(cache_key_fn=task_input_hash)
@@ -341,7 +271,6 @@ def get_files(sub: Path, space: str) -> frozenset[ConnectivityFiles]:
                 func
                 / f"sub-{s}_ses-{e}_task-rest_run-{run}_desc-confounds_timeseries.tsv"
             )
-            "sub-10095_ses-V1_task-rest_run-1_space-MNI152NLin2009cAsym_desc-brain_mask.nii.gz"
             mask = (
                 func
                 / f"sub-{s}_ses-{e}_task-rest_run-{run}_space-{space}_desc-brain_mask.nii.gz"
@@ -463,17 +392,17 @@ def connectivity_flow(
                 detrend=detrend,
             )
 
-            final_confounds = update_confounds.submit(
+            final_confounds = task_utils.update_confounds.submit(
                 out / "confounds" / f"img={file.stem}/part-0.parquet",
-                acompcor_file=acompcor,
+                acompcor_file=acompcor,  # type: ignore
                 confounds=file.confounds,
             )
 
             spheres_connectivity.submit(
                 out / "dmn_connectivity" / f"img={file.stem}/part-0.parquet",
                 img=file.bold,
-                coordinates=baliki_coordinates,
-                confounds_file=final_confounds,
+                coordinates=baliki_coordinates,  # type: ignore
+                confounds_file=final_confounds,  # type: ignore
                 high_pass=high_pass,
                 low_pass=low_pass,
                 detrend=detrend,
@@ -481,7 +410,7 @@ def connectivity_flow(
             voxelwise_connectivity = get_gray_connectivity.submit(
                 out / "voxelwise_connectivity" / f"img={file.stem}/part-0.parquet",
                 img=file.bold,
-                confounds_file=final_confounds,
+                confounds_file=final_confounds,  # type: ignore
                 high_pass=high_pass,
                 low_pass=low_pass,
                 detrend=detrend,
@@ -489,14 +418,14 @@ def connectivity_flow(
             )
             get_degree.submit(
                 out / "degree" / f"img={file.stem}/part-0.parquet",
-                connectivity=voxelwise_connectivity,
+                connectivity=voxelwise_connectivity,  # type: ignore
                 src=file.bold,
                 link_density=link_density,
             )
             get_labels_connectivity.submit(
                 out / "labels_connectivity" / f"img={file.stem}/part-0.parquet",
                 img=file.bold,
-                confounds_file=final_confounds,
+                confounds_file=final_confounds,  # type: ignore
                 labels_img=utils.get_fan_atlas_file(),
                 high_pass=high_pass,
                 low_pass=low_pass,

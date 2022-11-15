@@ -14,7 +14,7 @@ from .flows.cat import cat_flow
 from .flows.connectivity import connectivity_flow
 
 
-@prefect.flow(task_runner=SequentialTaskRunner)
+@prefect.flow(task_runner=SequentialTaskRunner())
 def _main(
     anats: frozenset[Path] | None = None,
     output_dir: Path = Path("out"),

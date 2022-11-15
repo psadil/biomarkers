@@ -1,6 +1,6 @@
 from pathlib import Path
 from importlib import resources
-from typing import Callable, Concatenate, Literal, ParamSpec, TypeVar
+from typing import Callable, Concatenate, Literal, ParamSpec, TypeVar, Iterable
 
 import numpy as np
 import pandas as pd
@@ -83,6 +83,14 @@ def get_tr(nii: nb.Nifti1Image) -> float:
     return nii.header.get("pixdim")[4]
 
 
+def get_nps_mask() -> Path:
+    with resources.path(
+        "biomarkers.data.2013_Wager_NEJM_NPS", "weights_NSF_grouppred_cvpcr.nii.gz"
+    ) as f:
+        path = f
+    return path
+
+
 P = ParamSpec("P")
 R = TypeVar("R")
 
@@ -114,3 +122,21 @@ def cache_dataframe(
             setattr(wrapper, attr, value)
 
     return wrapper
+
+
+def _mat_to_df(cormat: np.ndarray, labels: Iterable[str]) -> pd.DataFrame:
+    source = []
+    target = []
+    connectivity = []
+    for xi, x in enumerate(labels):
+        for yi, y in enumerate(labels):
+            if yi <= xi:
+                continue
+            else:
+                source.append(x)
+                target.append(y)
+                connectivity.append(cormat[xi, yi])
+
+    return pd.DataFrame.from_dict(
+        {"source": source, "target": target, "connectivity": connectivity}
+    )

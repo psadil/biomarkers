@@ -1,11 +1,13 @@
 from pathlib import Path
 import tempfile
+import typing
 
 import pandas as pd
 from pyarrow import dataset
 
 import prefect
-from prefect.tasks import task_input_hash
+
+from .. import utils
 
 
 def write_tsv(dataframe: pd.DataFrame, filename: Path | None = None) -> Path:
@@ -33,7 +35,7 @@ def write_parquet(dataframe: pd.DataFrame, filename: Path | None = None) -> Path
 
 
 @prefect.task
-def combine_parquet(tables: list[Path], base_dir=Path) -> Path:
+def combine_parquet(tables: list[Path], base_dir: Path) -> Path:
     d = dataset.dataset(tables, format="parquet")
     dataset.write_dataset(
         data=d,
@@ -42,3 +44,55 @@ def combine_parquet(tables: list[Path], base_dir=Path) -> Path:
         existing_data_behavior="delete_matching",
     )
     return base_dir
+
+
+@prefect.task
+@utils.cache_dataframe
+def update_confounds(
+    acompcor_file: Path,
+    confounds: Path,
+    usecols: list[str] = [
+        "trans_x",
+        "trans_x_derivative1",
+        "trans_x_power2",
+        "trans_x_derivative1_power2",
+        "trans_y",
+        "trans_y_derivative1",
+        "trans_y_power2",
+        "trans_y_derivative1_power2",
+        "trans_z",
+        "trans_z_derivative1",
+        "trans_z_power2",
+        "trans_z_derivative1_power2",
+        "rot_x",
+        "rot_x_derivative1",
+        "rot_x_power2",
+        "rot_x_derivative1_power2",
+        "rot_y",
+        "rot_y_derivative1",
+        "rot_y_power2",
+        "rot_y_derivative1_power2",
+        "rot_z",
+        "rot_z_derivative1",
+        "rot_z_power2",
+        "rot_z_derivative1_power2",
+    ],
+    label: typing.Literal["CSF", "WM", "WM+CSF"] = "WM+CSF",
+) -> pd.DataFrame:
+    acompcor = pd.read_parquet(
+        acompcor_file, columns=["component", "tr", "value", "label"]
+    )
+    components = (
+        acompcor.query("label==@label and component < 5")
+        .drop("label", axis=1)
+        .pivot(index="tr", columns=["component"], values="value")
+    )
+    n_tr = components.shape[0]
+    components_df = (
+        pd.read_csv(confounds, delim_whitespace=True, usecols=usecols)
+        .iloc[-n_tr:, :]
+        .reset_index(drop=True)
+    )
+    out = pd.concat([components_df, components], axis=1)
+    out.columns = out.columns.astype(str)
+    return out
