@@ -152,9 +152,12 @@ cython_debug/
 #.idea/
 
 .git
+.vscode
+.typings
 *nii.gz
+*nii
+*img
+*hdr
 tests
 docs
-.vscode
 tools
-
