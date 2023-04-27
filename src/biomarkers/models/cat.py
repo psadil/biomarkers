@@ -146,13 +146,13 @@ class CATResult:
             nb.load(mask).dataobj,
             dtype=np.bool_,
         )
-        modulated = nb.load(self.mri.mwp1sub)
+        modulated: nb.Nifti1Image = nb.load(self.mri.mwp1sub)
         modulated_arr = np.asanyarray(modulated.dataobj)
         mean = np.mean(modulated_arr, where=sample_mask)
         d = pd.DataFrame(
             {
                 "mPFC": mean,
-                "volume": mean * np.prod(modulated.header.get_zooms()),
+                "volume": mean * np.prod(modulated.header.get_zooms()),  # type: ignore
             },
             index=[self.mri.mwp1sub],
         )

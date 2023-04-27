@@ -84,21 +84,21 @@ class FIRSTResults:
     # ValueError: mutable default <class 'dict'> for field rois is not allowed: use default_factory
     rois: dict[FIRSTLabel, int] = pydantic.Field(
         default_factory=lambda: {
-            FIRSTLabel("Left-Thalamus-Proper"): 10,
-            FIRSTLabel("Left-Caudate"): 11,
-            FIRSTLabel("Left-Putamen"): 12,
-            FIRSTLabel("Left-Pallidum"): 13,
-            FIRSTLabel("Brain-Stem /4th Ventricle"): 16,
-            FIRSTLabel("Left-Hippocampus"): 17,
-            FIRSTLabel("Left-Amygdala"): 18,
-            FIRSTLabel("Left-Accumbens-area"): 26,
-            FIRSTLabel("Right-Thalamus-Proper"): 49,
-            FIRSTLabel("Right-Caudate"): 50,
-            FIRSTLabel("Right-Putamen"): 51,
-            FIRSTLabel("Right-Pallidum"): 52,
-            FIRSTLabel("Right-Hippocampus"): 53,
-            FIRSTLabel("Right-Amygdala"): 54,
-            FIRSTLabel("Right-Accumbens-area"): 58,
+            FIRSTLabel(label="Left-Thalamus-Proper"): 10,
+            FIRSTLabel(label="Left-Caudate"): 11,
+            FIRSTLabel(label="Left-Putamen"): 12,
+            FIRSTLabel(label="Left-Pallidum"): 13,
+            FIRSTLabel(label="Brain-Stem /4th Ventricle"): 16,
+            FIRSTLabel(label="Left-Hippocampus"): 17,
+            FIRSTLabel(label="Left-Amygdala"): 18,
+            FIRSTLabel(label="Left-Accumbens-area"): 26,
+            FIRSTLabel(label="Right-Thalamus-Proper"): 49,
+            FIRSTLabel(label="Right-Caudate"): 50,
+            FIRSTLabel(label="Right-Putamen"): 51,
+            FIRSTLabel(label="Right-Pallidum"): 52,
+            FIRSTLabel(label="Right-Hippocampus"): 53,
+            FIRSTLabel(label="Right-Amygdala"): 54,
+            FIRSTLabel(label="Right-Accumbens-area"): 58,
         }
     )
 
@@ -210,16 +210,26 @@ class FSLAnatResult:
             T12std_skullcon=Path(root / "T12std_skullcon.mat"),
         )
 
-    def write_volumes(
+    def get_volumes(
         self,
-        filename: Path,
         labels: list[FIRSTLabel] = [
-            FIRSTLabel("Left-Amygdala"),
-            FIRSTLabel("Right-Amygdala"),
-            FIRSTLabel("Left-Hippocampus"),
-            FIRSTLabel("Right-Hippocampus"),
+            FIRSTLabel(label="Left-Thalamus-Proper"),
+            FIRSTLabel(label="Left-Caudate"),
+            FIRSTLabel(label="Left-Putamen"),
+            FIRSTLabel(label="Left-Pallidum"),
+            FIRSTLabel(label="Brain-Stem /4th Ventricle"),
+            FIRSTLabel(label="Left-Hippocampus"),
+            FIRSTLabel(label="Left-Amygdala"),
+            FIRSTLabel(label="Left-Accumbens-area"),
+            FIRSTLabel(label="Right-Thalamus-Proper"),
+            FIRSTLabel(label="Right-Caudate"),
+            FIRSTLabel(label="Right-Putamen"),
+            FIRSTLabel(label="Right-Pallidum"),
+            FIRSTLabel(label="Right-Hippocampus"),
+            FIRSTLabel(label="Right-Amygdala"),
+            FIRSTLabel(label="Right-Accumbens-area"),
         ],
-    ):
+    ) -> pd.DataFrame:
         """Write the volumes to a csv."""
         nii = np.asanyarray(
             nb.load(self.first_results.T1_first_all_fast_firstseg).get_fdata(),
@@ -229,7 +239,7 @@ class FSLAnatResult:
         for region in labels:
             vol_dict.update(
                 {
-                    region: np.sum(
+                    str(region): np.sum(
                         nii == self.first_results.rois.get(region),
                         dtype=np.uint32,
                     )
@@ -241,5 +251,4 @@ class FSLAnatResult:
             .reset_index()
         )
         volumes["src"] = self.root.name
-        volumes["method"] = "FIRST"
-        volumes.to_csv(filename, index=False, sep="\t")
+        return volumes

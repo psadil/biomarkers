@@ -49,8 +49,9 @@ def combine_parquet(tables: list[Path], base_dir: Path) -> Path:
 @prefect.task
 @utils.cache_dataframe
 def update_confounds(
-    acompcor_file: Path,
     confounds: Path,
+    n_non_steady_state_tr: int = 0,
+    acompcor_file: Path | None = None,
     usecols: list[str] = [
         "trans_x",
         "trans_x_derivative1",
@@ -77,22 +78,26 @@ def update_confounds(
         "rot_z_power2",
         "rot_z_derivative1_power2",
     ],
-    label: typing.Literal["CSF", "WM", "WM+CSF"] = "WM+CSF",
+    label: typing.Literal["CSF", "WM", "WM+CSF"] | None = "WM+CSF",
+    extra: Path | None = None,
 ) -> pd.DataFrame:
-    acompcor = pd.read_parquet(
-        acompcor_file, columns=["component", "tr", "value", "label"]
-    )
-    components = (
-        acompcor.query("label==@label and component < 5")
-        .drop("label", axis=1)
-        .pivot(index="tr", columns=["component"], values="value")
-    )
-    n_tr = components.shape[0]
-    components_df = (
-        pd.read_csv(confounds, delim_whitespace=True, usecols=usecols)
-        .iloc[-n_tr:, :]
-        .reset_index(drop=True)
-    )
-    out = pd.concat([components_df, components], axis=1)
+    confounds_df = pd.read_csv(confounds, delim_whitespace=True, usecols=usecols)
+    n_tr = confounds_df.shape[0] - n_non_steady_state_tr
+    components_df = confounds_df.iloc[-n_tr:, :].reset_index(drop=True)
+    if extra:
+        extra_cols = pd.read_parquet(extra)
+        components_df = pd.concat([components_df, extra_cols], axis=1)
+    if acompcor_file and label:
+        acompcor = pd.read_parquet(
+            acompcor_file, columns=["component", "tr", "value", "label"]
+        )
+        components = (
+            acompcor.query("label==@label and component < 5")
+            .drop("label", axis=1)
+            .pivot(index="tr", columns=["component"], values="value")
+        )
+        out = pd.concat([components_df, components], axis=1)
+    else:
+        out = components_df
     out.columns = out.columns.astype(str)
     return out

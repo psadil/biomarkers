@@ -4,42 +4,86 @@ from pathlib import Path
 
 import click
 
-import prefect
-from prefect.task_runners import SequentialTaskRunner
+# import prefect
+# from prefect.task_runners import SequentialTaskRunner
 import prefect_dask
+
+# import prefect_ray
 from dask import config
+
 
 from .flows.fslanat import fslanat_flow
 from .flows.cat import cat_flow
 from .flows.connectivity import connectivity_flow
+from .flows.cuff import cuff_flow
+
+# from .flows.debias import debias_flow
+from .flows import cuff33
 
 
-@prefect.flow(task_runner=SequentialTaskRunner())
+# @prefect.flow(task_runner=SequentialTaskRunner())
 def _main(
     anats: frozenset[Path] | None = None,
     output_dir: Path = Path("out"),
     cat_dir: Path | None = None,
-    fmriprep_subdirs: frozenset[Path] | None = None,
+    rest_subdirs: frozenset[Path] | None = None,
+    cuff_subdirs: frozenset[Path] | None = None,
+    fmriprep_subdir: frozenset[Path] | None = None,
 ) -> None:
 
     if anats:
         fslanat_flow.with_options(
             task_runner=prefect_dask.DaskTaskRunner(
-                cluster_kwargs={"n_workers": 50, "threads_per_worker": 1}
+                cluster_kwargs={"n_workers": 40, "threads_per_worker": 1}
             )
         )(images=anats, out=output_dir, return_state=True)
+        # fslanat_flow.with_options(
+        #     task_runner=prefect_dask.DaskTaskRunner(
+        #         cluster_kwargs={"n_workers": 20, "threads_per_worker": 1}
+        #     )
+        # )(images=anats, out=output_dir, return_state=True)
     if cat_dir:
         cat_flow.with_options(
             task_runner=prefect_dask.DaskTaskRunner(
-                cluster_kwargs={"n_workers": 50, "threads_per_worker": 1}
+                cluster_kwargs={"n_workers": 40, "threads_per_worker": 1}
             )
         )(cat_dir=cat_dir, out=output_dir, return_state=True)
-    if fmriprep_subdirs:
+        # cat_flow.with_options(
+        #     task_runner=prefect_dask.DaskTaskRunner(
+        #         cluster_kwargs={"n_workers": 20, "threads_per_worker": 1}
+        #     )
+        # )(cat_dir=cat_dir, out=output_dir, return_state=True)
+    if rest_subdirs:
+        # cuff_flow.with_options(
+        #     task_runner=prefect_dask.DaskTaskRunner(
+        #         cluster_kwargs={"n_workers": 30, "threads_per_worker": 1}
+        #     )
+        # )(subdirs=rest_subdirs, out=output_dir, return_state=True)
         connectivity_flow.with_options(
+            task_runner=prefect_dask.DaskTaskRunner(
+                cluster_kwargs={"n_workers": 20, "threads_per_worker": 1}
+            )
+        )(subdirs=rest_subdirs, out=output_dir, return_state=True)
+    if cuff_subdirs:
+        # debias_flow.with_options(
+        #     task_runner=prefect_dask.DaskTaskRunner(
+        #         cluster_kwargs={"n_workers": 20, "threads_per_worker": 1}
+        #     )
+        # )(subdirs=cuff_subdirs, out=output_dir, return_state=True)
+        cuff_flow.with_options(
             task_runner=prefect_dask.DaskTaskRunner(
                 cluster_kwargs={"n_workers": 30, "threads_per_worker": 1}
             )
-        )(subdirs=fmriprep_subdirs, out=output_dir, return_state=True)
+        )(subdirs=cuff_subdirs, out=output_dir, return_state=True)
+        # cuff_flow.with_options(
+        #     task_runner=SequentialTaskRunner()
+        # )(subdirs=cuff_subdirs, out=output_dir, return_state=True)
+    if fmriprep_subdir:
+        cuff33.cuff_flow.with_options(
+            task_runner=prefect_dask.DaskTaskRunner(
+                cluster_kwargs={"n_workers": 20, "threads_per_worker": 1}
+            )
+        )(subdirs=fmriprep_subdir, out=output_dir, return_state=True)
 
 
 @click.command(context_settings={"ignore_unknown_options": True})
@@ -63,6 +107,18 @@ def _main(
     ),
 )
 @click.option(
+    "--rest-dir",
+    type=click.Path(
+        exists=True, file_okay=False, dir_okay=True, resolve_path=True, path_type=Path
+    ),
+)
+@click.option(
+    "--cuff-dir",
+    type=click.Path(
+        exists=True, file_okay=False, dir_okay=True, resolve_path=True, path_type=Path
+    ),
+)
+@click.option(
     "--fmriprep-dir",
     type=click.Path(
         exists=True, file_okay=False, dir_okay=True, resolve_path=True, path_type=Path
@@ -72,12 +128,16 @@ def _main(
     "--tmpdir",
     type=click.Path(exists=True, file_okay=False, dir_okay=True, resolve_path=True),
 )
+@click.option("--sub-limit", type=int, default=None)
 def main(
     bids_dir: Path | None = None,
     output_dir: Path = Path("out"),
     cat_dir: Path | None = None,
+    rest_dir: Path | None = None,
+    cuff_dir: Path | None = None,
     fmriprep_dir: Path | None = None,
     tmpdir: str | None = None,
+    sub_limit: int | None = None,
 ) -> None:
 
     # this were all used while troubleshooting. It might be worth exploring removing them
@@ -97,13 +157,28 @@ def main(
         os.environ["TMPDIR"] = tmpdir
     if not output_dir.exists():
         output_dir.mkdir()
-    if fmriprep_dir:
-        fmriprep_subdirs = frozenset(fmriprep_dir.glob("sub*"))
 
-    anats = frozenset(bids_dir.glob("sub*/ses*/anat/*T1w.nii.gz")) if bids_dir else None
+    rest_subdirs = (
+        frozenset(list(rest_dir.glob("sub*"))[0:sub_limit]) if rest_dir else None
+    )
+    cuff_subdirs = (
+        frozenset(list(cuff_dir.glob("sub*"))[0:sub_limit]) if cuff_dir else None
+    )
+    fmriprep_subdirs = (
+        frozenset(list(fmriprep_dir.glob("sub*"))[0:sub_limit])
+        if fmriprep_dir
+        else None
+    )
+    anats = (
+        frozenset(list(bids_dir.glob("sub*/ses*/anat/*T1w.nii.gz"))[0:sub_limit])
+        if bids_dir
+        else None
+    )
     _main(
         output_dir=output_dir,
         anats=anats,
-        fmriprep_subdirs=fmriprep_subdirs,
+        rest_subdirs=rest_subdirs,
+        cuff_subdirs=cuff_subdirs,
         cat_dir=cat_dir,
+        fmriprep_subdir=fmriprep_subdirs,
     )

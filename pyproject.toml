@@ -27,6 +27,9 @@ dependencies = [
 
 [project.scripts]
 mark = "biomarkers.biomarkers:main"
+fslanat = "biomarkers.cli.fslanat:main"
+func = "biomarkers.cli.func:main"
+anat = "biomarkers.cli.anat:main"
 
 [build-system]
 requires = ["setuptools"]

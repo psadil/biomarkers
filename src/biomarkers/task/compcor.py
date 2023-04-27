@@ -5,17 +5,8 @@ import numpy as np
 # from numpy.polynomial import Legendre
 import pandas as pd
 
-from nilearn import signal
-from nilearn.masking import apply_mask
-
-from sklearn.decomposition import PCA
-
 import nibabel as nb
-
-import ants
-
-from skimage.morphology import ball
-from scipy import ndimage
+from nibabel import processing
 
 import prefect
 
@@ -68,6 +59,8 @@ def comp_cor(X: np.ndarray) -> pd.DataFrame:
     Returns:
         pd.DataFrame: _description_
     """
+    from sklearn.decomposition import PCA
+
     assert X.ndim == 2, "y must be a 2D array"
     assert (
         X.shape[0] >= X.shape[1]
@@ -80,16 +73,16 @@ def comp_cor(X: np.ndarray) -> pd.DataFrame:
 
     # keep all components
     out = (
-        pd.DataFrame(pca.components_.T)
+        pd.DataFrame(pca.components_.T)  # type: ignore
         .assign(tr=range(n_tr))
         .melt(id_vars=["tr"], var_name="component")
         .infer_objects()
-        .assign(n_samples=pca.n_samples_)
+        .assign(n_samples=pca.n_samples_)  # type: ignore
     )
     # compfor files end up as integers
     # need str for eventual writting to parquet
     out.columns = out.columns.astype(str)
-    out["explained_variance_ratio"] = pca.explained_variance_ratio_[out["component"]]
+    out["explained_variance_ratio"] = pca.explained_variance_ratio_[out["component"]]  # type: ignore
     # if truncate is None:
     # out = pd.DataFrame(pca.components_.T)
     # keep only components that pass broken stick threshold
@@ -110,9 +103,12 @@ def get_components(
     mask: nb.Nifti1Image,
     high_pass: float | None = None,
     low_pass: float | None = None,
-    n_non_steady_state_seconds: float = 0,
+    n_non_steady_state_tr: int = 0,
     detrend: bool = False,
 ) -> pd.DataFrame:
+
+    from nilearn import signal
+    from nilearn.masking import apply_mask
 
     X: np.ndarray = apply_mask(imgs=img, mask_img=mask)
     tr = utils.get_tr(nb.load(img))
@@ -123,8 +119,8 @@ def get_components(
         high_pass=high_pass,
         low_pass=low_pass,
         t_r=tr,
-        sample_mask=utils.sec_to_index(
-            seconds=n_non_steady_state_seconds, tr=tr, n_tr=X.shape[0]
+        sample_mask=utils.exclude_to_index(
+            n_non_steady_state_tr=n_non_steady_state_tr, n_tr=X.shape[0]
         ),
     )
     del X
@@ -139,12 +135,15 @@ def get_acompcor_mask(
     mask_matters: list[Path],
 ) -> nb.Nifti1Image:
 
+    from skimage.morphology import ball
+    from scipy import ndimage
+
     # PV maps from FAST
     gm_nii = nb.load(gray_matter)
 
     mask_data = np.zeros(gm_nii.shape, dtype=np.bool_)
     for mask in mask_matters:
-        mask_data |= np.asanyarray(nb.load(mask).dataobj, dtype=np.bool_)
+        mask_data |= np.asarray(nb.load(mask).dataobj, dtype=np.bool_)
         if not "CSF" in mask.stem:
             # Dilate the GM mask
             gm_dilated = ndimage.binary_dilation(
@@ -155,23 +154,15 @@ def get_acompcor_mask(
 
     # Resample probseg maps to BOLD resolution
     # assume already in matching space
-
-    # ants has difficulty reading and writing
     target_nii = nb.load(target)
-    bold_mask = ants.resample_image_to_target(
-        image=ants.from_nibabel(
-            nb.Nifti1Image(mask_data, gm_nii.affine, gm_nii.header)
-        ),
-        target=ants.from_nibabel(target_nii),
-        interp_type="lanczosWindowedSinc",
+    weights_nii: nb.Nifti1Image = processing.resample_from_to(
+        from_img=nb.Nifti1Image(mask_data, gm_nii.affine, gm_nii.header),
+        to_vox_map=target_nii,
+        order=1,
     )
-
-    return ants.to_nibabel(bold_mask > 0.99)
-    # threshold/binarize
-    # binary_bold_mask = bold_mask.numpy() > 0.99
-    # return nb.Nifti1Image(
-    #     binary_bold_mask, affine=target_nii.affine, header=target_nii.header
-    # )
+    return nb.Nifti1Image(
+        weights_nii.get_fdata() > 0.99, weights_nii.affine, weights_nii.header
+    )
 
 
 @prefect.task
@@ -182,7 +173,7 @@ def do_compcor(
     probseg: Iterable[Path],
     high_pass: float | None = None,
     low_pass: float | None = None,
-    n_non_steady_state_seconds: float = 0,
+    n_non_steady_state_tr: int = 0,
     detrend: bool = False,
 ) -> pd.DataFrame:
 
@@ -206,7 +197,7 @@ def do_compcor(
                 mask=mask,
                 high_pass=high_pass,
                 low_pass=low_pass,
-                n_non_steady_state_seconds=n_non_steady_state_seconds,
+                n_non_steady_state_tr=n_non_steady_state_tr,
                 detrend=detrend,
             ).assign(label="+".join(label), src=img.name)
         )
