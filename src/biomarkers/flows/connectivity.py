@@ -11,15 +11,11 @@ from sklearn import covariance
 import pydantic
 from pydantic.dataclasses import dataclass
 
-# from sklearn.utils import Bunch
-
 from nilearn import maskers
 from nilearn.connectome import ConnectivityMeasure
-from nilearn import datasets
 from nilearn import image
 from nilearn import masking
 
-import ants
 
 import networkx as nx
 
@@ -27,7 +23,6 @@ import networkx as nx
 # import patsy
 
 import prefect
-from prefect.tasks import task_input_hash
 
 # from prefect.task_runners import SequentialTaskRunner
 
@@ -77,6 +72,8 @@ def get_baliki_coordinates() -> frozenset[Coordinate]:
 
 
 def get_power_coordinates() -> frozenset[Coordinate]:
+    from nilearn import datasets
+
     rois: pd.DataFrame = datasets.fetch_coords_power_2011(legacy_format=False).rois
     rois.query("not roi in [127, 183, 184, 185, 243, 244, 245, 246]", inplace=True)
     rois.rename(columns={"roi": "label"}, inplace=True)
@@ -111,19 +108,17 @@ def spheres_connectivity(
         low_pass=low_pass,
         t_r=utils.get_tr(nii),
         standardize=False,
-        standardize_confounds=False,
+        standardize_confounds=True,
         detrend=detrend,
     )
     # confounds are already sliced
-    time_series = masker.fit_transform(imgs=nii, confounds=confounds)
+    time_series = masker.fit_transform(nii, confounds=confounds)
     connectivity_measure = ConnectivityMeasure(
         cov_estimator=covariance.EmpiricalCovariance(store_precision=False),  # type: ignore
         kind="correlation",
     )
     correlation_matrix = connectivity_measure.fit_transform([time_series]).squeeze()  # type: ignore
-    df = utils._mat_to_df(correlation_matrix, [x.label for x in coordinates]).assign(
-        confounds="+".join([str(x) for x in confounds.columns.values]),
-    )
+    df = utils._mat_to_df(correlation_matrix, [x.label for x in coordinates])
     df["connectivity"] = np.arctanh(df["connectivity"])
     return df
 
@@ -159,7 +154,7 @@ def get_labels_connectivity(
         resampling_target="data",
     )
     # confounds are already sliced
-    time_series = masker.fit_transform(imgs=nii, confounds=confounds)
+    time_series = masker.fit_transform(nii, confounds=confounds)
     connectivity_measure = ConnectivityMeasure(
         cov_estimator=covariance.EmpiricalCovariance(store_precision=False),  # type: ignore
         kind="correlation",
@@ -199,6 +194,8 @@ def get_gray_connectivity(
     Returns:
         _type_: _description_
     """
+    import ants
+
     confounds = pd.read_parquet(confounds_file)
     n_tr = confounds.shape[0]
     nii: nb.Nifti1Image = nb.load(img).slicer[:, :, :, -n_tr:]
@@ -242,7 +239,6 @@ def get_gray_connectivity(
     return df
 
 
-@prefect.task(cache_key_fn=task_input_hash)
 def get_files(sub: Path, space: str) -> frozenset[ConnectivityFiles]:
     out = set()
     subgroup = re.search(r"(?<=sub-)\d{5}", str(sub))
@@ -371,8 +367,8 @@ def connectivity_flow(
     out: Path,
     high_pass: float | None = 0.01,
     low_pass: float | None = 0.1,
-    n_non_steady_state_seconds: float = 15,
-    detrend: bool = True,
+    n_non_steady_state_tr: int = 12,
+    detrend: bool = False,
     space: str = "MNI152NLin2009cAsym",
     link_density: frozenset[float] = frozenset({0.1}),
 ) -> None:
@@ -388,7 +384,7 @@ def connectivity_flow(
                 probseg=file.probseg,
                 high_pass=high_pass,
                 low_pass=low_pass,
-                n_non_steady_state_seconds=n_non_steady_state_seconds,
+                n_non_steady_state_tr=n_non_steady_state_tr,
                 detrend=detrend,
             )
 
@@ -396,6 +392,8 @@ def connectivity_flow(
                 out / "confounds" / f"img={file.stem}/part-0.parquet",
                 acompcor_file=acompcor,  # type: ignore
                 confounds=file.confounds,
+                label="WM+CSF",
+                n_non_steady_state_tr=n_non_steady_state_tr,
             )
 
             spheres_connectivity.submit(
@@ -407,21 +405,21 @@ def connectivity_flow(
                 low_pass=low_pass,
                 detrend=detrend,
             )
-            voxelwise_connectivity = get_gray_connectivity.submit(
-                out / "voxelwise_connectivity" / f"img={file.stem}/part-0.parquet",
-                img=file.bold,
-                confounds_file=final_confounds,  # type: ignore
-                high_pass=high_pass,
-                low_pass=low_pass,
-                detrend=detrend,
-                brain_mask=file.mask,
-            )
-            get_degree.submit(
-                out / "degree" / f"img={file.stem}/part-0.parquet",
-                connectivity=voxelwise_connectivity,  # type: ignore
-                src=file.bold,
-                link_density=link_density,
-            )
+            # voxelwise_connectivity = get_gray_connectivity.submit(
+            #     out / "voxelwise_connectivity" / f"img={file.stem}/part-0.parquet",
+            #     img=file.bold,
+            #     confounds_file=final_confounds,  # type: ignore
+            #     high_pass=high_pass,
+            #     low_pass=low_pass,
+            #     detrend=detrend,
+            #     brain_mask=file.mask,
+            # )
+            # get_degree.submit(
+            #     out / "degree" / f"img={file.stem}/part-0.parquet",
+            #     connectivity=voxelwise_connectivity,  # type: ignore
+            #     src=file.bold,
+            #     link_density=link_density,
+            # )
             get_labels_connectivity.submit(
                 out / "labels_connectivity" / f"img={file.stem}/part-0.parquet",
                 img=file.bold,
