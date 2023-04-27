@@ -7,14 +7,15 @@ COPY --chown=$MAMBA_USER:$MAMBA_USER pyproject.toml README.md src /tmp/biomarker
 
 # need to install python first for fsl installer (env handled by some python packages)
 # # (otherwise python will not be found)
-ENV MAMBA_DOCKERFILE_ACTIVATE=1 
-RUN micromamba install --name base --yes --file /tmp/env.yml --verbose \
+ENV MAMBA_DOCKERFILE_ACTIVATE=1 \
+    TZ=Europe/London 
+RUN micromamba install --name base --yes --file /tmp/env.yml \
     && pip install --no-deps /tmp/biomarkers/ \
     && rm -rf /tmp/biomarkers /tmp/env.yml \
     && micromamba clean --yes --all
 
 ENV FSLDIR=/opt/conda \
-    FSLOUTPUTTYPE=NIFTI_GZ
+    FSLOUTPUTTYPE=NIFTI_GZ 
 
 # Best practices ? (https://github.com/nipreps/mriqc/blob/master/Dockerfile)
 # USER root
