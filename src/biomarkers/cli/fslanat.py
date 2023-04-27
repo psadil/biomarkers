@@ -15,7 +15,11 @@ def _main(
 ) -> None:
     fslanat_flow.with_options(
         task_runner=prefect_dask.DaskTaskRunner(
-            cluster_kwargs={"n_workers": n_workers, "threads_per_worker": 1}
+            cluster_kwargs={
+                "n_workers": n_workers,
+                "threads_per_worker": 1,
+                "dashboard_address": None,
+            }
         )
     )(images=anats, out=output_dir, return_state=True)
 
