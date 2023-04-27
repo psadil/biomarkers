@@ -16,7 +16,7 @@ def _predict_fsl_anat_output(out: Path, basename: str) -> Path:
 @prefect.task
 def _fslanat(image: Path, out: Path):
     basename = utils.img_stem(image)
-    anat = _predict_fsl_anat_output(out / "fslanat", basename)
+    anat = _predict_fsl_anat_output(out, basename)
 
     # if the output already exists, we don't want this to run again.
     # fsl_anat automatically and always adds .anat to the value of -o, so we check for
