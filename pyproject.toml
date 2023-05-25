@@ -9,6 +9,7 @@ dependencies = [
     "nilearn",
     "numpy",
     "pandas",
+    "polars",
     "prefect",
     "prefect_shell",
     "prefect-dask"

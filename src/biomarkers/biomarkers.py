@@ -12,13 +12,13 @@ import prefect_dask
 from dask import config
 
 
-from .flows.fslanat import fslanat_flow
-from .flows.cat import cat_flow
-from .flows.connectivity import connectivity_flow
-from .flows.cuff import cuff_flow
+from biomarkers.flows.fslanat import fslanat_flow
+from biomarkers.flows.cat import cat_flow
+from biomarkers.flows.connectivity import connectivity_flow
+from biomarkers.flows.cuff import cuff_flow
 
 # from .flows.debias import debias_flow
-from .flows import cuff33
+from biomarkers.flows import cuff33
 
 
 # @prefect.flow(task_runner=SequentialTaskRunner())
@@ -30,7 +30,6 @@ def _main(
     cuff_subdirs: frozenset[Path] | None = None,
     fmriprep_subdir: frozenset[Path] | None = None,
 ) -> None:
-
     if anats:
         fslanat_flow.with_options(
             task_runner=prefect_dask.DaskTaskRunner(
@@ -139,7 +138,6 @@ def main(
     tmpdir: str | None = None,
     sub_limit: int | None = None,
 ) -> None:
-
     # this were all used while troubleshooting. It might be worth exploring removing them
     # Though, it's also not clear that there is enough benefit to letting Dask spill memory onto
     # disk, so they are staying off for now

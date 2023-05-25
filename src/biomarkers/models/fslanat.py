@@ -15,8 +15,6 @@ import nibabel as nb
 class FIRSTROI:
     name: str
     root: pydantic.DirectoryPath
-    corr: pydantic.FilePath
-    img: pydantic.FilePath
     bvars: pydantic.FilePath
     vtk: pydantic.FilePath
 
@@ -29,8 +27,6 @@ class FIRSTROI:
         return cls(
             name=name,
             root=root,
-            corr=root / f"T1_first-{name}_corr.nii.gz",
-            img=root / f"T1_first-{name}_first.nii.gz",
             bvars=root / f"T1_first-{name}_first.bvars",
             vtk=root / f"T1_first-{name}_first.vtk",
         )

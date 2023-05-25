@@ -16,23 +16,14 @@ from nilearn.connectome import ConnectivityMeasure
 from nilearn import image
 from nilearn import masking
 
-
-import networkx as nx
-
-# import statsmodels as sm
-# import patsy
-
 import prefect
-
-# from prefect.task_runners import SequentialTaskRunner
-
 
 from .. import utils
 from ..task import compcor
 from ..task import utils as task_utils
 
 
-# TODO: remove 8 nodes from ower2011 atlas that are in the cerebellum
+# TODO: remove 8 nodes from Power2011 atlas that are in the cerebellum
 
 
 @dataclass(frozen=True)
@@ -91,7 +82,6 @@ def spheres_connectivity(
     low_pass: float | None = None,
     detrend: bool = False,
 ) -> pd.DataFrame:
-
     """
     for confounds,
     - Friston24,
@@ -133,7 +123,6 @@ def get_labels_connectivity(
     low_pass: float | None = None,
     detrend: bool = False,
 ) -> pd.DataFrame:
-
     """
     for confounds,
     - Friston24,
@@ -296,71 +285,6 @@ def get_nedges(n_nodes: int, density: float) -> int:
     return np.floor_divide(density * n_nodes * (n_nodes - 1), 2).astype(int)
 
 
-def df_to_graph(connectivity: pd.DataFrame, link_density: float) -> nx.Graph:
-    g = nx.Graph()
-    nodes = set(
-        connectivity["source"].unique().tolist()
-        + connectivity["target"].unique().tolist()
-    )
-    g.add_nodes_from(nodes)
-    connectivity["connectivity"] = connectivity["connectivity"].abs()
-    trimmed = connectivity.nlargest(
-        n=get_nedges(n_nodes=len(nodes), density=link_density),
-        columns="connectivity",
-    )
-    g.add_edges_from(trimmed[["source", "target"]].itertuples(index=False))
-    return g
-
-
-@prefect.task
-@utils.cache_dataframe
-def get_degree(
-    connectivity: Path, src: Path, link_density: frozenset[float] = frozenset({0.1})
-) -> pd.DataFrame:
-
-    df = pd.read_parquet(connectivity)
-    degrees = []
-    # careful to avoid counting by 0.01
-    for density in link_density:
-        g = df_to_graph(df, link_density=density)
-        degrees.append(
-            pd.DataFrame.from_dict(dict(g.degree), orient="index", columns=["degree"])
-            .reset_index()
-            .rename(columns={"index": "roi"})
-            .assign(density=density)
-        )
-
-    return pd.concat(degrees, ignore_index=True).assign(src=src.name)
-
-
-# def get_hub_disruption(degrees: list[pd.DataFrame]) -> pd.DataFrame:
-#     d = pd.concat(degrees, ignore_index=True)
-#     avgs = d.groupby("roi").agg({"degree": "mean"}).rename(columns={"degree": "avg"})
-#     d = d.join(avgs, on="roi")
-#     d["degree_centered"] = d["degree"] - d["avg"]
-
-#     # this could be refactored to run in parallel (e.g., convert this task to a flow),
-#     # but I'm banking on the fitting being quick enough that it won't matter
-#     hub_disruption = []
-#     for name, group in d.groupby("src"):
-#         y, X = patsy.dmatrices(
-#             "degree_centered ~ avg", data=group, return_type="dataframe"
-#         )
-#         model = sm.OLS(y, X)
-#         fit = model.fit()
-#         hub_disruption.append(
-#             pd.DataFrame(
-#                 {
-#                     "slope": [fit.params.avg],
-#                     "src": [name],
-#                 }
-#             )
-#         )
-
-#     return pd.concat(hub_disruption, ignore_index=True)
-
-
-# @prefect.flow(task_runner=SequentialTaskRunner)
 @prefect.flow
 def connectivity_flow(
     subdirs: frozenset[Path],
@@ -370,7 +294,6 @@ def connectivity_flow(
     n_non_steady_state_tr: int = 12,
     detrend: bool = False,
     space: str = "MNI152NLin2009cAsym",
-    link_density: frozenset[float] = frozenset({0.1}),
 ) -> None:
     baliki_coordinates = get_baliki_coordinates.submit()
 
@@ -413,12 +336,6 @@ def connectivity_flow(
             #     low_pass=low_pass,
             #     detrend=detrend,
             #     brain_mask=file.mask,
-            # )
-            # get_degree.submit(
-            #     out / "degree" / f"img={file.stem}/part-0.parquet",
-            #     connectivity=voxelwise_connectivity,  # type: ignore
-            #     src=file.bold,
-            #     link_density=link_density,
             # )
             get_labels_connectivity.submit(
                 out / "labels_connectivity" / f"img={file.stem}/part-0.parquet",

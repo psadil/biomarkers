@@ -8,7 +8,7 @@ import nibabel as nb
 import pydantic
 from pydantic.dataclasses import dataclass
 
-from .. import utils
+from biomarkers import utils
 
 
 @dataclass(frozen=True)
@@ -141,7 +141,6 @@ class CATResult:
         filename,
         mask: Path = utils.get_mpfc_mask(),
     ) -> None:
-
         sample_mask = np.asanyarray(
             nb.load(mask).dataobj,
             dtype=np.bool_,

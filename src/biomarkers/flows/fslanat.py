@@ -5,12 +5,12 @@ import shutil
 
 import prefect
 
-from ..models.fslanat import FSLAnatResult
-from .. import utils
+from biomarkers.models.fslanat import FSLAnatResult
+from biomarkers import utils
 
 
 def _predict_fsl_anat_output(out: Path, basename: str) -> Path:
-    return Path(out / basename).with_suffix(".anat").absolute()
+    return (out / basename).with_suffix(".anat").absolute()
 
 
 @prefect.task

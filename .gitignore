@@ -152,7 +152,6 @@ cython_debug/
 #.idea/
 
 *nii.gz
-!src/biomarkers/data/*nii.gz
 
 # for now, until the tests are developed
 tests/data
