@@ -11,7 +11,6 @@ dependencies = [
     "pandas",
     "polars",
     "prefect",
-    "prefect_shell",
     "prefect-dask"
 ]
 # note some dependencies only available through conda (see env.yml)
