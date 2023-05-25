@@ -18,7 +18,7 @@ RUN micromamba install -q --name base --yes --file /tmp/env.yml \
     && rm -rf /tmp/biomarkers /tmp/env.yml \
     && micromamba clean --yes --all
 
-COPY --from=fsl --chown=$MAMBA_USER:$MAMBA_USER /opt/fsl /opt/
+COPY --from=fsl --chown=$MAMBA_USER:$MAMBA_USER /opt/fsl/ /opt/fsl
 
 # Best practices ? (https://github.com/nipreps/mriqc/blob/master/Dockerfile)
 # USER root
