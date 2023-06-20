@@ -4,7 +4,7 @@ import prefect
 
 import ancpbids
 
-from biomarkers.flows import func
+from biomarkers.flows import signature
 
 
 @prefect.task()
@@ -13,26 +13,34 @@ def _gather_anat(
     sub: str,
     ses: str,
     space: str = "MNI152NLin2009cAsym",
-) -> list[func.Func3d]:
+) -> list[signature.Func3d]:
     filters = {"sub": sub, "ses": ses, "space": space}
     out = []
     for label in ["GM", "WM", "CSF"]:
         out.append(
-            func.Func3d(
+            signature.Func3d(
                 label=label,
                 dtype="f8",
                 path=Path(
-                    str(layout.get(label=label, return_type="filename", **filters)[0])
+                    str(
+                        layout.get(
+                            label=label, return_type="filename", **filters
+                        )[0]
+                    )
                 ),
             )
         )
     for desc in ["brain", "preproc"]:
         out.append(
-            func.Func3d(
+            signature.Func3d(
                 label=desc,
                 dtype="f8",
                 path=Path(
-                    str(layout.get(desc=desc, return_type="filename", **filters)[0])
+                    str(
+                        layout.get(
+                            desc=desc, return_type="filename", **filters
+                        )[0]
+                    )
                 ),
             )
         )
@@ -52,7 +60,11 @@ def anat_flow(
                     layout=layout, sub=str(sub), ses=str(ses), space=space
                 )
 
-                func.to_parquet3d.submit(
-                    out / "anat" / f"sub={sub}" / f"ses={ses}" / "part-0.parquet",
+                signature.to_parquet3d.submit(
+                    out
+                    / "anat"
+                    / f"sub={sub}"
+                    / f"ses={ses}"
+                    / "part-0.parquet",
                     fmriprep_func3ds=to_convert,  # type: ignore
                 )

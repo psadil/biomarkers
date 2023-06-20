@@ -1,5 +1,4 @@
 from pathlib import Path
-import re
 
 import numpy as np
 
@@ -8,19 +7,19 @@ import pandas as pd
 
 from sklearn import covariance
 
-import pydantic
 from pydantic.dataclasses import dataclass
 
 from nilearn import maskers
 from nilearn.connectome import ConnectivityMeasure
-from nilearn import image
-from nilearn import masking
+
+import ancpbids
 
 import prefect
 
-from .. import utils
-from ..task import compcor
-from ..task import utils as task_utils
+from biomarkers import utils
+from biomarkers.task import utils as task_utils
+from biomarkers.task import compcor
+from biomarkers.flows.signature import _get
 
 
 # TODO: remove 8 nodes from Power2011 atlas that are in the cerebellum
@@ -30,16 +29,6 @@ from ..task import utils as task_utils
 class Coordinate:
     label: str
     seed: tuple[int, int, int]
-
-
-@dataclass(frozen=True)
-class ConnectivityFiles:
-    bold: pydantic.FilePath
-    boldref: pydantic.FilePath
-    probseg: frozenset[pydantic.FilePath]
-    confounds: pydantic.FilePath
-    mask: pydantic.FilePath
-    stem: str
 
 
 def df_to_coordinates(dataframe: pd.DataFrame) -> frozenset[Coordinate]:
@@ -65,8 +54,12 @@ def get_baliki_coordinates() -> frozenset[Coordinate]:
 def get_power_coordinates() -> frozenset[Coordinate]:
     from nilearn import datasets
 
-    rois: pd.DataFrame = datasets.fetch_coords_power_2011(legacy_format=False).rois
-    rois.query("not roi in [127, 183, 184, 185, 243, 244, 245, 246]", inplace=True)
+    rois: pd.DataFrame = datasets.fetch_coords_power_2011(
+        legacy_format=False
+    ).rois
+    rois.query(
+        "not roi in [127, 183, 184, 185, 243, 244, 245, 246]", inplace=True
+    )
     rois.rename(columns={"roi": "label"}, inplace=True)
     return df_to_coordinates(rois)
 
@@ -138,7 +131,7 @@ def get_labels_connectivity(
         low_pass=low_pass,
         t_r=utils.get_tr(nii),
         standardize=False,
-        standardize_confounds=False,
+        standardize_confounds=True,
         detrend=detrend,
         resampling_target="data",
     )
@@ -152,7 +145,8 @@ def get_labels_connectivity(
         [time_series]
     ).squeeze()  # type: ignore
     df = utils._mat_to_df(
-        correlation_matrix, [str(x + 1) for x in range(correlation_matrix.shape[0])]
+        correlation_matrix,
+        [str(x + 1) for x in range(correlation_matrix.shape[0])],
     ).assign(
         img=utils.img_stem(img),
         confounds="+".join([str(x) for x in confounds.columns.values]),
@@ -160,129 +154,20 @@ def get_labels_connectivity(
     return df
 
 
-@prefect.task
-@utils.cache_dataframe
-def get_gray_connectivity(
-    img: Path,
-    confounds_file: Path,
-    brain_mask: Path | None = None,
-    mask_img: Path = utils.get_mni6gray_mask(),
-    high_pass: float | None = None,
-    low_pass: float | None = None,
-    detrend: bool = False,
-) -> pd.DataFrame:
-    """
-    for each fmri
-    - clean signals
-    - downsample to 6mm, bspline
-    - mask
-    - calculate connectivity
-
-    Note: Mansour et al. 2016 used raw correlations, not atanh transform
-
-    Returns:
-        _type_: _description_
-    """
-    import ants
-
-    confounds = pd.read_parquet(confounds_file)
-    n_tr = confounds.shape[0]
-    nii: nb.Nifti1Image = nb.load(img).slicer[:, :, :, -n_tr:]
-    nii_clean: nb.Nifti1Image = image.clean_img(
-        imgs=nii,
-        high_pass=high_pass,
-        low_pass=low_pass,
-        t_r=utils.get_tr(nii),
-        confounds=confounds,
-        standardize=False,
-        detrend=detrend,
-        mask_img=brain_mask,
-    )  # type: ignore
-    del nii
-
-    mask_nii = nb.load(mask_img)
-    ants6 = ants.resample_image_to_target(
-        image=ants.from_nibabel(nii_clean),
-        target=ants.from_nibabel(mask_nii),
-        interp_type="lanczosWindowedSinc",
-        imagetype=3,
-    )
-    del nii_clean
-    imgs: nb.Nifti1Image = ants.to_nibabel(ants6)
-    del ants6
-    # n_tr x n_voxels
-    X: np.ndarray = masking.apply_mask(imgs=imgs, mask_img=mask_nii)
-    del imgs
-    connectivity_measure = ConnectivityMeasure(
-        cov_estimator=covariance.EmpiricalCovariance(store_precision=False),  # type: ignore
-        kind="correlation",
-    )
-    correlation_matrix = connectivity_measure.fit_transform([X]).squeeze()  # type: ignore
-    del X
-    df = utils._mat_to_df(
-        correlation_matrix, np.flatnonzero(np.asanyarray(mask_nii.dataobj))
-    ).assign(
-        img=utils.img_stem(img),
-        confounds="+".join([str(x) for x in confounds.columns.values]),
-    )
-    return df
-
-
-def get_files(sub: Path, space: str) -> frozenset[ConnectivityFiles]:
-    out = set()
-    subgroup = re.search(r"(?<=sub-)\d{5}", str(sub))
-    if subgroup is None:
-        raise ValueError(f"{sub=} doesn't look like a bids sub directory")
-    else:
-        s = subgroup.group(0)
-    for ses in sub.glob("ses*"):
-        sesgroup = re.search(r"(?<=ses-)\w{2}", str(ses))
-        if sesgroup is None:
-            raise ValueError(f"{ses=} doesn't look like a bids ses directory")
-        else:
-            e = sesgroup.group(0)
-        func = ses / "func"
-        for run in ["1", "2"]:
-            bold = (
-                func
-                / f"sub-{s}_ses-{e}_task-rest_run-{run}_space-{space}_desc-preproc_bold.nii.gz"
-            )
-            boldref = (
-                func
-                / f"sub-{s}_ses-{e}_task-rest_run-{run}_space-{space}_boldref.nii.gz"
-            )
-            probseg = frozenset(ses.glob(f"anat/*{space}*probseg*"))
-            confounds = (
-                func
-                / f"sub-{s}_ses-{e}_task-rest_run-{run}_desc-confounds_timeseries.tsv"
-            )
-            mask = (
-                func
-                / f"sub-{s}_ses-{e}_task-rest_run-{run}_space-{space}_desc-brain_mask.nii.gz"
-            )
-            if (
-                bold.exists()
-                and boldref.exists()
-                and confounds.exists()
-                and mask.exists()
-                and all([x.exists() for x in probseg])
-            ):
-                out.add(
-                    ConnectivityFiles(
-                        bold=bold,
-                        boldref=boldref,
-                        probseg=probseg,
-                        confounds=confounds,
-                        mask=mask,
-                        stem=utils.img_stem(bold),
-                    )
-                )
-
-    return frozenset(out)
-
-
-def get_nedges(n_nodes: int, density: float) -> int:
-    return np.floor_divide(density * n_nodes * (n_nodes - 1), 2).astype(int)
+def _get_probseg(layout, sub, ses, space) -> int:
+    return [
+        _get.fn(
+            layout=layout,
+            filters={
+                "sub": str(sub),
+                "ses": str(ses),
+                "space": str(space),
+                "label": label,
+                "suffix": "probseg",
+            },
+        )
+        for label in ["GM", "WM", "CSF"]
+    ]
 
 
 @prefect.flow
@@ -298,51 +183,95 @@ def connectivity_flow(
     baliki_coordinates = get_baliki_coordinates.submit()
 
     for subdir in subdirs:
-        # not submitting to enable acess of individual parts
-        for file in get_files(sub=subdir, space=space):
-            acompcor = compcor.do_compcor.submit(
-                out / "acompcor" / f"img={file.stem}/part-0.parquet",
-                img=file.bold,
-                boldref=file.boldref,
-                probseg=file.probseg,
-                high_pass=high_pass,
-                low_pass=low_pass,
-                n_non_steady_state_tr=n_non_steady_state_tr,
-                detrend=detrend,
-            )
+        layout = ancpbids.BIDSLayout(str(subdir))
+        for sub in layout.get_subjects():
+            for ses in layout.get_sessions(sub=sub):
+                probseg = _get_probseg(
+                    layout=layout, sub=sub, ses=ses, space=space
+                )
+                for task in layout.get_tasks(sub=sub, ses=ses):
+                    for run in layout.get_runs(sub=sub, ses=ses, task=task):
+                        i = _get(
+                            layout=layout,
+                            filters={
+                                "sub": str(sub),
+                                "ses": str(ses),
+                                "task": str(task),
+                                "run": str(run),
+                                "space": str(space),
+                                "desc": "preproc",
+                                "suffix": "bold",
+                            },
+                        )
+                        acompcor = compcor.do_compcor.submit(
+                            out
+                            / "acompcor"
+                            / f"sub={sub}/ses={ses}/task={task}/run={run}/space={space}"
+                            / "part-0.parquet",
+                            img=i,
+                            boldref=_get(
+                                layout=layout,
+                                filters={
+                                    "sub": str(sub),
+                                    "ses": str(ses),
+                                    "task": str(task),
+                                    "run": str(run),
+                                    "space": str(space),
+                                    "suffix": "boldref",
+                                },
+                            ),
+                            probseg=probseg,
+                            high_pass=high_pass,
+                            low_pass=low_pass,
+                            n_non_steady_state_tr=n_non_steady_state_tr,
+                            detrend=detrend,
+                        )
 
-            final_confounds = task_utils.update_confounds.submit(
-                out / "confounds" / f"img={file.stem}/part-0.parquet",
-                acompcor_file=acompcor,  # type: ignore
-                confounds=file.confounds,
-                label="WM+CSF",
-                n_non_steady_state_tr=n_non_steady_state_tr,
-            )
+                        confounds = task_utils.update_confounds.submit(
+                            out
+                            / "connectivity-confounds"
+                            / f"sub={sub}"
+                            / f"ses={ses}"
+                            / f"task={task}"
+                            / f"run={run}"
+                            / "part-0.parquet",
+                            acompcor_file=acompcor,  # type: ignore
+                            confounds=_get(
+                                layout=layout,
+                                filters={
+                                    "sub": str(sub),
+                                    "ses": str(ses),
+                                    "task": str(task),
+                                    "run": str(run),
+                                    "desc": "confounds",
+                                },
+                            ),
+                            label="WM+CSF",
+                            n_non_steady_state_tr=n_non_steady_state_tr,
+                        )
 
-            spheres_connectivity.submit(
-                out / "dmn_connectivity" / f"img={file.stem}/part-0.parquet",
-                img=file.bold,
-                coordinates=baliki_coordinates,  # type: ignore
-                confounds_file=final_confounds,  # type: ignore
-                high_pass=high_pass,
-                low_pass=low_pass,
-                detrend=detrend,
-            )
-            # voxelwise_connectivity = get_gray_connectivity.submit(
-            #     out / "voxelwise_connectivity" / f"img={file.stem}/part-0.parquet",
-            #     img=file.bold,
-            #     confounds_file=final_confounds,  # type: ignore
-            #     high_pass=high_pass,
-            #     low_pass=low_pass,
-            #     detrend=detrend,
-            #     brain_mask=file.mask,
-            # )
-            get_labels_connectivity.submit(
-                out / "labels_connectivity" / f"img={file.stem}/part-0.parquet",
-                img=file.bold,
-                confounds_file=final_confounds,  # type: ignore
-                labels_img=utils.get_fan_atlas_file(),
-                high_pass=high_pass,
-                low_pass=low_pass,
-                detrend=detrend,
-            )
+                        spheres_connectivity.submit(
+                            out
+                            / "connectivity-dmn"
+                            / f"sub={sub}/ses={ses}/task={task}/run={run}/space={space}"
+                            / "part-0.parquet",
+                            img=i,
+                            coordinates=baliki_coordinates,  # type: ignore
+                            confounds_file=confounds,  # type: ignore
+                            high_pass=high_pass,
+                            low_pass=low_pass,
+                            detrend=detrend,
+                        )
+
+                        get_labels_connectivity.submit(
+                            out
+                            / "connectivity-labels"
+                            / f"sub={sub}/ses={ses}/task={task}/run={run}/space={space}"
+                            / "part-0.parquet",
+                            img=i,
+                            confounds_file=confounds,  # type: ignore
+                            labels_img=utils.get_fan_atlas_file(),
+                            high_pass=high_pass,
+                            low_pass=low_pass,
+                            detrend=detrend,
+                        )
